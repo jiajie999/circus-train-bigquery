@@ -45,6 +45,7 @@ public class BigQueryDataExtractionManager {
   public void cleanup() {
     log.info("Cleaning data from table:  {}.{}", table.getTableId().getDataset(), table.getTableId().getTable());
     service.cleanup(data);
+    service.cleanup(table);
   }
 
   public String location() {

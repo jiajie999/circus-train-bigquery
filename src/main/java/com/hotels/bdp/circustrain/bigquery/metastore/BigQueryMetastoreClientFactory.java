@@ -15,12 +15,7 @@
  */
 package com.hotels.bdp.circustrain.bigquery.metastore;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.cloud.bigquery.BigQuery;
 
@@ -29,20 +24,14 @@ import com.hotels.bdp.circustrain.core.metastore.ConditionalMetaStoreClientFacto
 import com.hotels.hcommon.hive.metastore.client.api.CloseableMetaStoreClient;
 import com.hotels.hcommon.hive.metastore.exception.MetaStoreClientException;
 
-public class BigQueryMetastoreClientFactory implements ConditionalMetaStoreClientFactory {
+public class BigQueryMetastoreClientFactory implements ConditionalMetaStoreClientFactory{
 
   public static final String ACCEPT_PREFIX = "bigquery://";
 
-  private static final Logger log = LoggerFactory.getLogger(BigQueryMetastoreClientFactory.class);
-
-  private final BigQuery bigQuery;
-  private final BigQueryDataExtractionManager dataExtractionManager;
-  private final Map<String, org.apache.hadoop.hive.metastore.api.Table> tableCache = new HashMap<>();
-  private BigQueryMetastoreClient cachedClient = null;
+  private final BigQueryMetastoreClient client;
 
   public BigQueryMetastoreClientFactory(BigQuery bigQuery, BigQueryDataExtractionManager dataExtractionManager) {
-    this.bigQuery = bigQuery;
-    this.dataExtractionManager = dataExtractionManager;
+    this.client = new BigQueryMetastoreClient(bigQuery, dataExtractionManager);
   }
 
   @Override
@@ -52,12 +41,6 @@ public class BigQueryMetastoreClientFactory implements ConditionalMetaStoreClien
 
   @Override
   public CloseableMetaStoreClient newInstance(HiveConf conf, String name) throws MetaStoreClientException {
-    if (cachedClient != null) {
-      log.info("Reusing cached BigQueryMetastoreClient");
-      return cachedClient;
-    }
-    log.info("Creating new instance of BigQueryMetastoreClient");
-    cachedClient = new BigQueryMetastoreClient(bigQuery, dataExtractionManager);
-    return cachedClient;
+    return client;
   }
 }

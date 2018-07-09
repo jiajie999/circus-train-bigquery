@@ -15,12 +15,12 @@
  */
 package com.hotels.bdp.circustrain.bigquery.extraction;
 
-import com.google.cloud.bigquery.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.cloud.bigquery.BigQueryError;
 import com.google.cloud.bigquery.Job;
+import com.google.cloud.bigquery.Table;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.Bucket;
 import com.google.cloud.storage.BucketInfo;
@@ -59,6 +59,10 @@ public class BigQueryDataExtractionService {
     if (!suceeded) {
       log.warn("Could not delete bucket {}", dataBucket);
     }
+  }
+
+  void cleanup(Table table) {
+    table.delete();
   }
 
   private void createBucket(BigQueryExtractionData extractionData) {

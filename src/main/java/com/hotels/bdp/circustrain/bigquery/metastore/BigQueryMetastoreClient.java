@@ -17,10 +17,10 @@ package com.hotels.bdp.circustrain.bigquery.metastore;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.apache.hadoop.hive.common.ObjectPair;
 import org.apache.hadoop.hive.common.ValidTxnList;
@@ -107,7 +107,6 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
   private final BigQuery bigQuery;
   private final BigQueryDataExtractionManager dataExtractionManager;
   private final Map<String, org.apache.hadoop.hive.metastore.api.Table> tableCache = new HashMap<>();
-  private final List<String> extractedTableLocation = new ArrayList<>();
 
   BigQueryMetastoreClient(BigQuery bigQuery, BigQueryDataExtractionManager dataExtractionManager) {
     this.bigQuery = bigQuery;
@@ -133,7 +132,6 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
     return bigQuery.getDataset(databaseName).get(tableName) != null;
   }
 
-  // TODO CE: Get rid of extration package and handle here with Filtered tables
   @Override
   public Table getTable(String databaseName, String tableName) throws TException {
     log.info("Getting table {}.{} from BigQuery", databaseName, tableName);
@@ -142,31 +140,36 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
       return tableCache.get(key);
     } else {
       checkDbExists(databaseName);
-      com.google.cloud.bigquery.Table table = BigQueryUtils.getBigQueryTable(bigQuery, databaseName, tableName);
-
-      // TODO CE: Refactor + substitute query here for query from config
-      TempTableQueryExecutor tempTableQueryExecutor = new TempTableQueryExecutor(bigQuery, "bdp", "my_testing_dataset");
-      com.google.cloud.bigquery.Table filteredTable = tempTableQueryExecutor
-          //TODO: Randomise databaseName and tableName
-          .execute(String.format("select year from %s.%s", databaseName, tableName));
-
-      if (filteredTable != null) {
-        table = filteredTable;
-      }
-
+      com.google.cloud.bigquery.Table table = getTableWithFilter(databaseName, tableName,
+          // TODO: Get query from Config and handle condition if its null
+          String.format("select year from %s.%s", databaseName, tableName));
       dataExtractionManager.register(table);
-
       Table hiveTable = new BigQueryToHiveTableConverter()
           .withDatabaseName(databaseName)
           .withTableName(tableName)
           .withSchema(table.getDefinition().getSchema())
           .withLocation(dataExtractionManager.location())
           .convert();
-
-      filteredTable.delete();
       tableCache.put(key, hiveTable);
       return hiveTable;
     }
+  }
+
+  private com.google.cloud.bigquery.Table getTableWithFilter(String dbName, String tableName, String filterQuery)
+    throws NoSuchObjectException {
+    com.google.cloud.bigquery.Table table = BigQueryUtils.getBigQueryTable(bigQuery, dbName, tableName);
+
+    // TODO CE: Refactor + substitute query here for query from config
+    String randomisedTableName = UUID.randomUUID().toString().replaceAll("-", "_");
+    TempTableQueryExecutor tempTableQueryExecutor = new TempTableQueryExecutor(bigQuery, dbName, randomisedTableName);
+    com.google.cloud.bigquery.Table filteredTable = tempTableQueryExecutor
+        // TODO: Sanitise String. Check its query runs against configured table in YAML
+        .execute(filterQuery);
+
+    if (filteredTable != null) {
+      table = filteredTable;
+    }
+    return table;
   }
 
   @Override
@@ -177,7 +180,7 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
 
   @Override
   public void close() {
-    // Do Nothing
+    // Do nothing
   }
 
   @Override
