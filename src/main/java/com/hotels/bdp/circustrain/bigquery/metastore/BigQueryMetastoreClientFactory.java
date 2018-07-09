@@ -15,6 +15,9 @@
  */
 package com.hotels.bdp.circustrain.bigquery.metastore;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +37,8 @@ public class BigQueryMetastoreClientFactory implements ConditionalMetaStoreClien
 
   private final BigQuery bigQuery;
   private final BigQueryDataExtractionManager dataExtractionManager;
+  private final Map<String, org.apache.hadoop.hive.metastore.api.Table> tableCache = new HashMap<>();
+  private BigQueryMetastoreClient cachedClient = null;
 
   public BigQueryMetastoreClientFactory(BigQuery bigQuery, BigQueryDataExtractionManager dataExtractionManager) {
     this.bigQuery = bigQuery;
@@ -47,7 +52,12 @@ public class BigQueryMetastoreClientFactory implements ConditionalMetaStoreClien
 
   @Override
   public CloseableMetaStoreClient newInstance(HiveConf conf, String name) throws MetaStoreClientException {
+    if (cachedClient != null) {
+      log.info("Reusing cached BigQueryMetastoreClient");
+      return cachedClient;
+    }
     log.info("Creating new instance of BigQueryMetastoreClient");
-    return new BigQueryMetastoreClient(bigQuery, dataExtractionManager);
+    cachedClient = new BigQueryMetastoreClient(bigQuery, dataExtractionManager);
+    return cachedClient;
   }
 }

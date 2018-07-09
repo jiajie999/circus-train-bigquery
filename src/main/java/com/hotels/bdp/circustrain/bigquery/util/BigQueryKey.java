@@ -13,18 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.hotels.bdp.circustrain.bigquery.extraction;
+package com.hotels.bdp.circustrain.bigquery.util;
 
-import static org.junit.Assert.assertEquals;
+public class BigQueryKey {
 
-import static com.hotels.bdp.circustrain.bigquery.extraction.BigQueryDataExtractionKey.makeKey;
-
-import org.junit.Test;
-
-public class BigQueryDataExtractionKeyTest {
-
-  @Test
-  public void makeKeyTest() {
-    assertEquals("database.table", makeKey("database", "table"));
+  public static String makeKey(String databaseName, String tableName) {
+    return databaseName + "." + tableName;
   }
 }

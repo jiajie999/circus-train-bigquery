@@ -13,11 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.hotels.bdp.circustrain.bigquery.extraction;
+package com.hotels.bdp.circustrain.bigquery.util;
 
-class BigQueryDataExtractionKey {
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 
-  static String makeKey(String databaseName, String tableName) {
-    return databaseName + "." + tableName;
+import com.google.cloud.bigquery.BigQuery;
+
+public class BigQueryUtils {
+
+  public static com.google.cloud.bigquery.Table getBigQueryTable(BigQuery bigQuery, String databaseName, String tableName)
+      throws NoSuchObjectException {
+    com.google.cloud.bigquery.Table table = bigQuery.getDataset(databaseName).get(tableName);
+    if (table == null) {
+      throw new NoSuchObjectException(databaseName + "." + tableName + " could not be found");
+    }
+    return table;
   }
 }

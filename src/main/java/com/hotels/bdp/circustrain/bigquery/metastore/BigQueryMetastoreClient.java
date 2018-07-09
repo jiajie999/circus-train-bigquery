@@ -17,6 +17,8 @@ package com.hotels.bdp.circustrain.bigquery.metastore;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -92,7 +94,10 @@ import org.slf4j.LoggerFactory;
 import com.google.cloud.bigquery.BigQuery;
 
 import com.hotels.bdp.circustrain.bigquery.conversion.BigQueryToHiveTableConverter;
+import com.hotels.bdp.circustrain.bigquery.executor.TempTableQueryExecutor;
 import com.hotels.bdp.circustrain.bigquery.extraction.BigQueryDataExtractionManager;
+import com.hotels.bdp.circustrain.bigquery.util.BigQueryKey;
+import com.hotels.bdp.circustrain.bigquery.util.BigQueryUtils;
 import com.hotels.hcommon.hive.metastore.client.api.CloseableMetaStoreClient;
 
 class BigQueryMetastoreClient implements CloseableMetaStoreClient {
@@ -101,6 +106,8 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
 
   private final BigQuery bigQuery;
   private final BigQueryDataExtractionManager dataExtractionManager;
+  private final Map<String, org.apache.hadoop.hive.metastore.api.Table> tableCache = new HashMap<>();
+  private final List<String> extractedTableLocation = new ArrayList<>();
 
   BigQueryMetastoreClient(BigQuery bigQuery, BigQueryDataExtractionManager dataExtractionManager) {
     this.bigQuery = bigQuery;
@@ -126,27 +133,40 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
     return bigQuery.getDataset(databaseName).get(tableName) != null;
   }
 
+  // TODO CE: Get rid of extration package and handle here with Filtered tables
   @Override
   public Table getTable(String databaseName, String tableName) throws TException {
     log.info("Getting table {}.{} from BigQuery", databaseName, tableName);
-    checkDbExists(databaseName);
-    com.google.cloud.bigquery.Table table = getBigQueryTable(databaseName, tableName);
-    Table hiveTable = new BigQueryToHiveTableConverter()
-        .withDatabaseName(databaseName)
-        .withTableName(tableName)
-        .withSchema(table.getDefinition().getSchema())
-        .withLocation(dataExtractionManager.location())
-        .convert();
-    return hiveTable;
-  }
+    final String key = BigQueryKey.makeKey(databaseName, tableName);
+    if (tableCache.containsKey(key)) {
+      return tableCache.get(key);
+    } else {
+      checkDbExists(databaseName);
+      com.google.cloud.bigquery.Table table = BigQueryUtils.getBigQueryTable(bigQuery, databaseName, tableName);
 
-  private com.google.cloud.bigquery.Table getBigQueryTable(String databaseName, String tableName)
-    throws NoSuchObjectException {
-    com.google.cloud.bigquery.Table table = bigQuery.getDataset(databaseName).get(tableName);
-    if (table == null) {
-      throw new NoSuchObjectException(databaseName + "." + tableName + " could not be found");
+      // TODO CE: Refactor + substitute query here for query from config
+      TempTableQueryExecutor tempTableQueryExecutor = new TempTableQueryExecutor(bigQuery, "bdp", "my_testing_dataset");
+      com.google.cloud.bigquery.Table filteredTable = tempTableQueryExecutor
+          //TODO: Randomise databaseName and tableName
+          .execute(String.format("select year from %s.%s", databaseName, tableName));
+
+      if (filteredTable != null) {
+        table = filteredTable;
+      }
+
+      dataExtractionManager.register(table);
+
+      Table hiveTable = new BigQueryToHiveTableConverter()
+          .withDatabaseName(databaseName)
+          .withTableName(tableName)
+          .withSchema(table.getDefinition().getSchema())
+          .withLocation(dataExtractionManager.location())
+          .convert();
+
+      filteredTable.delete();
+      tableCache.put(key, hiveTable);
+      return hiveTable;
     }
-    return table;
   }
 
   @Override
