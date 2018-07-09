@@ -15,6 +15,8 @@
  */
 package com.hotels.bdp.circustrain.bigquery.metastore;
 
+import static org.apache.commons.lang.StringUtils.isBlank;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -157,19 +159,15 @@ class BigQueryMetastoreClient implements CloseableMetaStoreClient {
 
   private com.google.cloud.bigquery.Table getTableWithFilter(String dbName, String tableName, String filterQuery)
     throws NoSuchObjectException {
-    com.google.cloud.bigquery.Table table = BigQueryUtils.getBigQueryTable(bigQuery, dbName, tableName);
-
-    // TODO CE: Refactor + substitute query here for query from config
+    if (isBlank(filterQuery)) {
+      return BigQueryUtils.getBigQueryTable(bigQuery, dbName, tableName);
+    }
     String randomisedTableName = UUID.randomUUID().toString().replaceAll("-", "_");
     TempTableQueryExecutor tempTableQueryExecutor = new TempTableQueryExecutor(bigQuery, dbName, randomisedTableName);
-    com.google.cloud.bigquery.Table filteredTable = tempTableQueryExecutor
+    return tempTableQueryExecutor
+        // TODO CE: Refactor + substitute query here for query from config
         // TODO: Sanitise String. Check its query runs against configured table in YAML
         .execute(filterQuery);
-
-    if (filteredTable != null) {
-      table = filteredTable;
-    }
-    return table;
   }
 
   @Override
